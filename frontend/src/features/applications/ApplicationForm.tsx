@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useRef, useState } from 'react';
+import { type DragEvent, type FormEvent, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { ApiError } from '@/lib/api';
 import { type Upload, UploadFailure, uploadToS3 } from '@/lib/upload';
+import { cn } from '@/lib/utils';
 import { createApplication, requestPresign } from './api';
 import {
   MAX_VIDEO_BYTES,
@@ -28,9 +29,15 @@ const EMPTY = { fullName: '', idDocument: '', institution: '', program: '', amou
 
 const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
+/** El monto se guarda como dígitos y se muestra con separador de miles: 12000000 -> 12.000.000. */
+const onlyDigits = (value: string) => value.replace(/\D/g, '').slice(0, 12);
+const withSeparators = (digits: string) =>
+  digits === '' ? '' : Number(digits).toLocaleString('es-CO');
+
 export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
   const [values, setValues] = useState(EMPTY);
   const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -46,11 +53,10 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
   }
 
   /**
-   * Se ejecuta al elegir el archivo, antes de cualquier petición. Es lo que evita que un
-   * archivo inválido o demasiado grande consuma ancho de banda.
+   * Se ejecuta al elegir o soltar el archivo, antes de cualquier petición. Es lo que evita
+   * que un archivo inválido o demasiado grande consuma ancho de banda.
    */
-  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const chosen = event.target.files?.[0] ?? null;
+  function acceptFile(chosen: File | null) {
     setFieldErrors((prev) => ({ ...prev, video: '' }));
     setFormError(null);
 
@@ -75,6 +81,12 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
     }
 
     setFile(chosen);
+  }
+
+  function onDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    if (!busy) acceptFile(event.dataTransfer.files?.[0] ?? null);
   }
 
   function reset() {
@@ -150,12 +162,11 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
     }
   }
 
-  const fields = [
-    { name: 'fullName', label: 'Nombre completo', type: 'text', placeholder: 'Ana María Torres' },
-    { name: 'idDocument', label: 'Documento de identidad', type: 'text', placeholder: '1020304050' },
-    { name: 'institution', label: 'Institución educativa', type: 'text', placeholder: 'Universidad Nacional' },
-    { name: 'program', label: 'Programa académico', type: 'text', placeholder: 'Ingeniería de Sistemas' },
-    { name: 'amount', label: 'Monto solicitado (COP)', type: 'number', placeholder: '12000000' },
+  const textFields = [
+    { name: 'fullName', label: 'Nombre completo', placeholder: 'Ana María Torres' },
+    { name: 'idDocument', label: 'Documento de identidad', placeholder: '1020304050' },
+    { name: 'institution', label: 'Institución educativa', placeholder: 'Universidad Nacional' },
+    { name: 'program', label: 'Programa académico', placeholder: 'Ingeniería de Sistemas' },
   ] as const;
 
   return (
@@ -163,7 +174,8 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
       <CardHeader>
         <CardTitle>Nueva solicitud de crédito</CardTitle>
         <CardDescription>
-          Complete sus datos y adjunte el video de la entrevista.
+          Complete sus datos y adjunte el video de la entrevista. Todos los campos son
+          obligatorios.
         </CardDescription>
       </CardHeader>
 
@@ -175,12 +187,12 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
             </Alert>
           )}
 
-          {fields.map((field) => (
+          {textFields.map((field) => (
             <div key={field.name} className="space-y-2">
               <Label htmlFor={field.name}>{field.label}</Label>
               <Input
                 id={field.name}
-                type={field.type}
+                type="text"
                 placeholder={field.placeholder}
                 value={values[field.name]}
                 onChange={(e) => set(field.name, e.target.value)}
@@ -194,20 +206,75 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
           ))}
 
           <div className="space-y-2">
-            <Label htmlFor="video">Video de la entrevista</Label>
+            <Label htmlFor="amount">Monto solicitado (COP)</Label>
             <Input
-              id="video"
-              ref={fileInputRef}
-              type="file"
-              accept=".mp4,.webm,video/mp4,video/webm"
-              onChange={onFileChange}
-              aria-invalid={Boolean(fieldErrors.video)}
+              id="amount"
+              type="text"
+              inputMode="numeric"
+              placeholder="12.000.000"
+              value={withSeparators(values.amount)}
+              onChange={(e) => set('amount', onlyDigits(e.target.value))}
+              aria-invalid={Boolean(fieldErrors.amount)}
               disabled={busy}
+              className="tabular-nums"
             />
-            <p className="text-muted-foreground text-xs">
-              MP4 o WebM, hasta 200 MB.
-              {file && ` Seleccionado: ${file.name} (${megabytes(file.size)}).`}
-            </p>
+            {fieldErrors.amount && (
+              <p className="text-sm text-destructive">{fieldErrors.amount}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="video">Video de la entrevista</Label>
+
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!busy) setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              className={cn(
+                'rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors',
+                dragging && 'border-primary bg-accent',
+                !dragging && fieldErrors.video && 'border-destructive',
+                !dragging && !fieldErrors.video && 'border-input',
+                busy && 'opacity-60',
+              )}
+            >
+              <input
+                id="video"
+                ref={fileInputRef}
+                type="file"
+                accept=".mp4,.webm,video/mp4,video/webm"
+                onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
+                disabled={busy}
+                className="sr-only"
+              />
+
+              {file ? (
+                <>
+                  <p className="font-medium text-sm">{file.name}</p>
+                  <p className="text-muted-foreground text-xs">{megabytes(file.size)}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm">Arrastre el video aquí</p>
+                  <p className="text-muted-foreground text-xs">MP4 o WebM, hasta 200 MB</p>
+                </>
+              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 cursor-pointer"
+                disabled={busy}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {file ? 'Cambiar video' : 'Elegir archivo'}
+              </Button>
+            </div>
+
             {fieldErrors.video && <p className="text-sm text-destructive">{fieldErrors.video}</p>}
           </div>
 
@@ -222,6 +289,7 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
                 type="button"
                 variant="outline"
                 size="sm"
+                className="cursor-pointer"
                 onClick={() => uploadRef.current?.abort()}
               >
                 Cancelar subida
@@ -230,10 +298,12 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
           )}
 
           {phase === 'saving' && (
-            <p className="text-muted-foreground text-sm">Verificando el video y registrando la solicitud…</p>
+            <p className="text-muted-foreground text-sm">
+              Verificando el video y registrando la solicitud…
+            </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={busy}>
+          <Button type="submit" className="w-full cursor-pointer" disabled={busy}>
             {phase === 'idle' ? 'Enviar solicitud' : 'Procesando…'}
           </Button>
         </form>

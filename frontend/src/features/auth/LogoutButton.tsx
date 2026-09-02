@@ -1,3 +1,4 @@
+import { LogOutIcon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -8,6 +9,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
@@ -44,16 +46,23 @@ export function LogoutButton() {
 
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>¿Cerrar sesión?</AlertDialogTitle>
+          <AlertDialogMedia className="bg-destructive/10 text-destructive">
+            <LogOutIcon />
+          </AlertDialogMedia>
+          <AlertDialogTitle>Cerrar sesión</AlertDialogTitle>
           <AlertDialogDescription>
-            Tendrá que volver a iniciar sesión para consultar o enviar solicitudes.
+            ¿Seguro que quiere cerrar sesión? Tendrá que volver a iniciar sesión para acceder.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <AlertDialogFooter>
           <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={() => void confirm()} disabled={busy}>
-            {busy ? 'Cerrando…' : 'Cerrar sesión'}
+          <AlertDialogAction
+            variant="destructive"
+            onClick={() => void confirm()}
+            disabled={busy}
+          >
+            {busy ? 'Cerrando…' : 'Sí, cerrar sesión'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

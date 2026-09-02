@@ -94,7 +94,7 @@ export function AuthForm() {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
+        <CardHeader className="text-center">
           <CardTitle>{copy.title}</CardTitle>
           <CardDescription>{copy.description}</CardDescription>
         </CardHeader>

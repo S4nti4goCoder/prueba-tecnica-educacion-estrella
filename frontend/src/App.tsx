@@ -27,14 +27,17 @@ export default function App() {
   return (
     <div className="min-h-dvh bg-muted/40">
       <header className="flex items-center justify-between border-b bg-background px-6 py-3">
-        <span className="font-medium">Educación Estrella</span>
+        <span className="font-medium whitespace-nowrap">Educación Estrella</span>
         <div className="flex items-center gap-4">
-          <span className="text-muted-foreground text-sm">{session.email}</span>
+          {/* En pantallas estrechas no caben titulo, correo y boton a la vez. */}
+          <span className="hidden text-muted-foreground text-sm sm:inline">{session.email}</span>
           <LogoutButton />
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl space-y-6 p-6">
+      {/* Lado a lado en escritorio. El formulario no necesita media pantalla y la
+          tabla si: con columnas iguales, Estado se sale del borde. */}
+      <main className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[26rem_minmax(0,1fr)] lg:items-start">
         <ApplicationForm onCreated={() => setReloadToken((n) => n + 1)} />
         <ApplicationList reloadToken={reloadToken} />
       </main>
