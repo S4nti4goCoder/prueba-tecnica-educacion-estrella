@@ -1,4 +1,4 @@
-import { EyeIcon, EyeOffIcon } from 'lucide-react';
+import { CheckIcon, CircleIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -13,7 +13,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiError } from '@/lib/api';
-import { loginSchema, registerSchema } from './schemas';
+import { cn } from '@/lib/utils';
+import { isCommonPassword } from './commonPasswords';
+import { COMMON_PASSWORD_ERROR, PASSWORD_RULES, loginSchema, registerSchema } from './schemas';
 import { useSession } from './useSession';
 
 type Mode = 'login' | 'register';
@@ -47,6 +49,7 @@ export function AuthForm() {
   const [submitting, setSubmitting] = useState(false);
 
   const copy = COPY[mode];
+  const isRegister = mode === 'register';
 
   function switchMode() {
     setMode(mode === 'login' ? 'register' : 'login');
@@ -110,6 +113,7 @@ export function AuthForm() {
                 id="email"
                 type="email"
                 autoComplete="email"
+                placeholder="correo@ejemplo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 aria-invalid={Boolean(fieldErrors.email)}
@@ -127,6 +131,9 @@ export function AuthForm() {
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  placeholder="••••••••"
+                  // Al enfocar el campo, un lector de pantalla lee los requisitos.
+                  aria-describedby={isRegister ? 'requisitos-contrasena' : undefined}
                   className="pr-10"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -147,6 +154,35 @@ export function AuthForm() {
                   )}
                 </button>
               </div>
+              {/* Aparecen al empezar a escribir: en blanco solo serian ruido. */}
+              {isRegister && password.length > 0 && (
+                <ul id="requisitos-contrasena" className="space-y-1 pt-1 text-sm">
+                  {PASSWORD_RULES.map((rule) => {
+                    const met = rule.test(password);
+                    return (
+                      <li
+                        key={rule.label}
+                        className={cn(
+                          'flex items-center gap-2',
+                          met ? 'text-emerald-600' : 'text-muted-foreground',
+                        )}
+                      >
+                        {met ? (
+                          <CheckIcon className="size-3.5 shrink-0" />
+                        ) : (
+                          <CircleIcon className="size-3.5 shrink-0" />
+                        )}
+                        {rule.label}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {isRegister && !fieldErrors.password && isCommonPassword(password) && (
+                <p className="text-sm text-destructive">{COMMON_PASSWORD_ERROR}</p>
+              )}
+
               {fieldErrors.password && (
                 <p className="text-sm text-destructive">{fieldErrors.password}</p>
               )}
