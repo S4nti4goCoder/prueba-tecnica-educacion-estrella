@@ -50,6 +50,7 @@ Resources:
         Variables:
           USERS_TABLE: !Ref UsersTable
           APPLICATIONS_TABLE: !Ref ApplicationsTable
+          RATE_LIMITS_TABLE: !Ref RateLimitsTable
           VIDEOS_BUCKET: !Ref VideosBucket
           # El nombre, no el valor.
           JWT_SECRET_PARAMETER: !Ref JwtSecretParameterName
@@ -69,6 +70,15 @@ Resources:
                 - dynamodb:Query
                 - dynamodb:PutItem
               Resource: !GetAtt ApplicationsTable.Arn
+
+            # UpdateItem para contar, GetItem para consultar. Sin PutItem: el contador
+            # solo se toca con expresiones de actualización, nunca se reescribe entero.
+            - Sid: RateLimitsTable
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt RateLimitsTable.Arn
 
             # PutObject es lo que permite a la función firmar un presigned POST.
             - Sid: VideoObjects
@@ -128,6 +138,28 @@ Resources:
         - AttributeName: createdAtId
           KeyType: RANGE
 
+  # Contadores del limitador de intentos. Separada de las tablas de negocio: son datos
+  # efímeros que caducan solos y no deben compartir permisos con usuarios ni solicitudes.
+  RateLimitsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-rate-limits'
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      # Solo limpieza: DynamoDB puede tardar hasta 48 h en borrar una fila vencida, así
+      # que la ventana se decide comparando resetAt con el reloj, no con su existencia.
+      TimeToLiveSpecification:
+        AttributeName: resetAt
+        Enabled: true
+
   VideosBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -177,3 +209,6 @@ Outputs:
 
   ApplicationsTableName:
     Value: !Ref ApplicationsTable
+
+  RateLimitsTableName:
+    Value: !Ref RateLimitsTable

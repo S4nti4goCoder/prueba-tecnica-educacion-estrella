@@ -18,6 +18,7 @@ export type ErrorCode =
   | 'INVALID_CREDENTIALS'
   | 'UPLOAD_NOT_FOUND'
   | 'INVALID_FILE'
+  | 'RATE_LIMITED'
   | 'INTERNAL_ERROR';
 
 const BASE_HEADERS: Record<string, string> = {
@@ -44,6 +45,30 @@ export function parseJsonBody(event: {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * IP aproximada de quien llama. No es un dato de confianza.
+ *
+ * sourceIp no sirve, porque la petición entra por el rewrite de Amplify y sería la del
+ * proxy. Queda X-Forwarded-For, pero comprobado contra el despliegue: Amplify la reenvía
+ * tal y como llega y no añade la IP real, así que la cabecera entera la elige quien llama
+ * y puede mentir. Vale para frenar el uso torpe; por eso el inicio de sesión se limita
+ * por cuenta y no por aquí.
+ */
+export function clientIp(event: {
+  headers?: Record<string, string | undefined>;
+  requestContext?: { http?: { sourceIp?: string } };
+}): string {
+  const forwarded = event.headers?.['x-forwarded-for'];
+
+  if (forwarded) {
+    const chain = forwarded.split(',').map((part) => part.trim()).filter(Boolean);
+    const client = chain.at(-1);
+    if (client) return client;
+  }
+
+  return event.requestContext?.http?.sourceIp ?? 'desconocida';
 }
 
 /** Aplana los errores de Zod a { campo: mensaje } para que el formulario marque los inputs. */
@@ -148,6 +173,22 @@ export function notFound(message = 'Recurso no encontrado.'): HttpResponse {
 
 export function conflict(code: ErrorCode, message: string): HttpResponse {
   return error(409, code, message);
+}
+
+/** Retry-After es la cabecera estándar: dice cuándo tiene sentido volver a intentarlo. */
+export function tooManyRequests(retryAfterSeconds: number): HttpResponse {
+  const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+
+  return json(
+    429,
+    {
+      error: {
+        code: 'RATE_LIMITED' satisfies ErrorCode,
+        message: `Demasiados intentos. Vuelva a intentarlo en ${minutes} minutos.`,
+      },
+    },
+    { headers: { 'Retry-After': String(retryAfterSeconds) } },
+  );
 }
 
 /** La traza va a CloudWatch; el cliente solo recibe un identificador que citar. */
