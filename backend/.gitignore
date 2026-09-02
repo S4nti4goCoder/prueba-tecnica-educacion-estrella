@@ -1,0 +1,41 @@
+# ---- Dependencias ----
+node_modules/
+
+# ---- Compilados ----
+dist/
+build/
+*.tsbuildinfo
+
+# ---- AWS SAM ----
+.aws-sam/
+samconfig.toml
+packaged.yaml
+
+# ---- Secretos y credenciales ----
+# Nada de esta sección puede llegar nunca al repositorio.
+.env
+.env.*
+!.env.example
+.aws/
+*.pem
+*.key
+*.p12
+credentials*.csv
+accessKeys*.csv
+*_accessKeys.csv
+
+# ---- Sistema operativo ----
+.DS_Store
+Thumbs.db
+*.local
+
+# ---- Editores ----
+.vscode/
+.idea/
+
+# ---- Pruebas ----
+coverage/
+
+# ---- Logs ----
+*.log
+npm-debug.log*

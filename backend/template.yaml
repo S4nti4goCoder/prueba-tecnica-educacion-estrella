@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Educación Estrella - API de solicitudes de crédito
+
+Parameters:
+  FrontendOrigin:
+    Type: String
+    Default: https://main.d13iv7renrf8z3.amplifyapp.com
+    Description: Frontend desplegado. Autorizado a subir directamente a S3.
+
+  LocalOrigin:
+    Type: String
+    Default: http://localhost:5173
+    Description: Servidor de desarrollo de Vite. Se mantiene junto al origen desplegado para poder probar subidas en local.
+
+  JwtSecretParameterName:
+    Type: String
+    Default: /estrella/jwt-secret
+    # Se crea con el CLI: CloudFormation no puede crear parámetros SecureString.
+    Description: Nombre del parámetro SecureString de SSM que guarda la clave de firma del JWT.
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    MemorySize: 512
+    Timeout: 10
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: node22
+        Sourcemap: false
+        EntryPoints:
+          - src/index.ts
+    Properties:
+      CodeUri: ./
+      # esbuild aplana la salida, así que el bundle queda en index.js, no en src/index.js.
+      Handler: index.handler
+      # Sin ReservedConcurrentExecutions: el cupo total de esta cuenta es 10 y AWS
+      # exige que queden 10 sin reservar, así que rechaza cualquier reserva. El cupo
+      # de la cuenta ya acota el daño de una Function URL pública.
+      FunctionUrlConfig:
+        AuthType: NONE
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref UsersTable
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+          VIDEOS_BUCKET: !Ref VideosBucket
+          # El nombre, no el valor.
+          JWT_SECRET_PARAMETER: !Ref JwtSecretParameterName
+      Policies:
+        - Statement:
+            # Sin Scan, sin DeleteItem, sin ListBucket.
+            - Sid: UsersTable
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource: !GetAtt UsersTable.Arn
+
+            - Sid: ApplicationsTable
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:PutItem
+              Resource: !GetAtt ApplicationsTable.Arn
+
+            # PutObject es lo que permite a la función firmar un presigned POST.
+            - Sid: VideoObjects
+              Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+              Resource: !Sub '${VideosBucket.Arn}/users/*'
+
+            - Sid: JwtSecret
+              Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${JwtSecretParameterName}'
+
+  # Declarado a propósito: los grupos de logs que crea Lambda por su cuenta no caducan nunca.
+  ApiFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ApiFunction}'
+      RetentionInDays: 7
+
+  # El correo como clave de partición para imponer la unicidad de forma atómica con
+  # ConditionExpression: attribute_not_exists(email). Un GSI no puede hacerlo.
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-users'
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+
+  # Particionada por userId, así que un Query solo puede devolver las filas de quien llama.
+  # La clave de ordenación empieza por la fecha: el orden inverso sale gratis.
+  ApplicationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-applications'
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAtId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: createdAtId
+          KeyType: RANGE
+
+  VideosBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-videos-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # ACL desactivadas: un presigned POST no puede hacer público un objeto ni intentándolo.
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      # POST es lo que usa la subida prefirmada. GET es para la reproducción mediante una
+      # URL de lectura prefirmada. Ninguno funciona sin firma: el bucket es privado.
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - !Ref FrontendOrigin
+              - !Ref LocalOrigin
+            AllowedMethods: [POST, GET]
+            AllowedHeaders: ['*']
+            ExposedHeaders: [ETag]
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+Outputs:
+  FunctionUrl:
+    Description: Endpoint público de la API
+    Value: !GetAtt ApiFunctionUrl.FunctionUrl
+
+  VideosBucketName:
+    Description: Bucket privado con los videos de las entrevistas
+    Value: !Ref VideosBucket
+
+  UsersTableName:
+    Value: !Ref UsersTable
+
+  ApplicationsTableName:
+    Value: !Ref ApplicationsTable
