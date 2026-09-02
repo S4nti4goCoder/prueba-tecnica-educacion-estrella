@@ -22,8 +22,13 @@ export interface Limit {
  */
 export const LOGIN_LIMIT: Limit = { name: 'login', attempts: 5, windowSeconds: 15 * 60 };
 
-/** Por IP y por lo tanto burlable. Frena el uso torpe, no a un atacante. */
-export const REGISTER_LIMIT: Limit = { name: 'register', attempts: 3, windowSeconds: 60 * 60 };
+/**
+ * Por IP y por lo tanto burlable: frena el uso torpe, no a un atacante.
+ *
+ * Diez y no tres porque quien comparte salida a internet comparte contador, y en una
+ * oficina o un campus varios estudiantes legítimos se bloquearían entre ellos.
+ */
+export const REGISTER_LIMIT: Limit = { name: 'register', attempts: 10, windowSeconds: 60 * 60 };
 
 export interface Blocked {
   retryAfterSeconds: number;

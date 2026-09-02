@@ -5,7 +5,7 @@ Description: Educación Estrella - API de solicitudes de crédito
 Parameters:
   FrontendOrigin:
     Type: String
-    Default: https://main.d13iv7renrf8z3.amplifyapp.com
+    Default: https://main.dj0sqa3r34n40.amplifyapp.com
     Description: Frontend desplegado. Autorizado a subir directamente a S3.
 
   LocalOrigin:
