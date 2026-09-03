@@ -62,7 +62,7 @@ export function LogoutButton() {
             onClick={() => void confirm()}
             disabled={busy}
           >
-            {busy ? 'Cerrando…' : 'Sí, cerrar sesión'}
+            {busy ? 'Cerrando...' : 'Sí, cerrar sesión'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

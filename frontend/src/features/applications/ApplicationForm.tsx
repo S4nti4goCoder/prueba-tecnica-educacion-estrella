@@ -281,7 +281,7 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
           {phase === 'uploading' && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Subiendo el video…</span>
+                <span className="text-muted-foreground">Subiendo el video...</span>
                 <span className="tabular-nums">{progress}%</span>
               </div>
               <Progress value={progress} />
@@ -299,12 +299,12 @@ export function ApplicationForm({ onCreated }: { onCreated: () => void }) {
 
           {phase === 'saving' && (
             <p className="text-muted-foreground text-sm">
-              Verificando el video y registrando la solicitud…
+              Verificando el video y registrando la solicitud...
             </p>
           )}
 
           <Button type="submit" className="w-full cursor-pointer" disabled={busy}>
-            {phase === 'idle' ? 'Enviar solicitud' : 'Procesando…'}
+            {phase === 'idle' ? 'Enviar solicitud' : 'Procesando...'}
           </Button>
         </form>
       </CardContent>

@@ -13,7 +13,7 @@ export default function App() {
   if (loading) {
     return (
       <main className="flex min-h-dvh items-center justify-center">
-        <p className="text-muted-foreground text-sm">Cargando…</p>
+        <p className="text-muted-foreground text-sm">Cargando...</p>
       </main>
     );
   }

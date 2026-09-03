@@ -189,7 +189,7 @@ export function AuthForm() {
             </div>
 
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? 'Enviando…' : copy.submit}
+              {submitting ? 'Enviando...' : copy.submit}
             </Button>
           </form>
 
